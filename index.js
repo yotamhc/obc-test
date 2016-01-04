@@ -1,9 +1,9 @@
-INPUT_IFC = 'em1';
-OUTPUT_IFC = 'em3';
+INPUT_IFC = 'obi-eth0';
+OUTPUT_IFC = 'obi-eth0';
 INPUT_PCAP = '/home/yotam/in_pcap.pcap'
 OUTPUT_PCAP = '/home/yotam/out_pcap.pcap'
 
-USE_DEVICES = false;
+USE_DEVICES = true;
 
 module.exports = require('./node_modules/express/lib/express');
 
@@ -129,6 +129,7 @@ function sendMessage(msg, host) {
 
 	var host_addr = host.substr(0, host.indexOf(':'));
 	console.log('Sending msg ' + msg.type + ' to host ' + host_addr);
+	console.log(' 	' + JSON.stringify(msg));
 	var args = {
 		data: msg,
 		headers: { "Content-Type": "application/json" } 
