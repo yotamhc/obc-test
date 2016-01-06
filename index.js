@@ -1,5 +1,9 @@
-INPUT_IFC = 'eth0';
-OUTPUT_IFC = 'eth1';
+INPUT_IFC = 'em1';
+OUTPUT_IFC = 'em3';
+INPUT_PCAP = '/home/yotam/in_pcap.pcap'
+OUTPUT_PCAP = '/home/yotam/out_pcap.pcap'
+
+USE_DEVICES = false;
 
 module.exports = require('./node_modules/express/lib/express');
 
@@ -18,10 +22,11 @@ var http = require('http');
 var Client = require('node-rest-client').Client;
 var client = new Client();
 
-//var bodyParser = require('body-parser');
+
+var bodyParser = require('body-parser');
 //var multer = require('multer'); 
 
-//app.use(bodyParser.json()); // for parsing application/json
+app.use(bodyParser.json()); // for parsing application/json
 //app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 //app.use(multer({inMemory: true})); // for parsing multipart/form-data
 
@@ -37,6 +42,18 @@ function ToDevice(id, devname) {
 	this.type = "ToDevice";
 	this.name = id;
 	this.config = { devname: devname };
+}
+
+function FromDump(id, filename) {
+	this.type = "FromDump";
+	this.name = id;
+	this.config = { filename: filename };
+}
+
+function ToDump(id, filename) {
+	this.type = "ToDump";
+	this.name = id;
+	this.config = { filename: filename };
 }
 
 function Discard(id) {
@@ -68,26 +85,39 @@ function Connector(src, port, dst) {
 //////////////////////////////////////////////////////////
 // Samples
 
-var fromDevice = new FromDevice("FromDevice-Firewall", INPUT_IFC);
-var headerClassifier = new HeaderClassifier("HeaderClassifier-Firewall",
+var fromDevice = new FromDevice("FromDeviceFirewall", INPUT_IFC);
+var fromDump = new FromDump("FromDumpFirewall", INPUT_PCAP);
+var headerClassifier = new HeaderClassifier("HeaderClassifierFirewall",
         [
-                { eth_type: 0x0800, ipv4_proto: 6, tcp_dst: 80 },
+                { ETH_TYPE: 0x0800, IPV4_PROTO: 6, TCP_DST: 80 },
                 { }
         ]);
-var toDevice = new ToDevice("ToDevice-Firewall", OUTPUT_IFC);
-var discard = new Discard("Discard-Firewall");
+var toDevice = new ToDevice("ToDeviceFirewall", OUTPUT_IFC);
+var toDump = new ToDump("ToDumpFirewall", OUTPUT_PCAP);
+var discard = new Discard("DiscardFirewall");
 
-var firewall_blocks = [ fromDevice, headerClassifier, toDevice, discard ];
+if (USE_DEVICES) {
+	var firewall_blocks = [ fromDevice, headerClassifier, toDevice, discard ];
+	var firewall_connectors = [
+		new Connector(fromDevice, 0, headerClassifier),
+		new Connector(headerClassifier, 0, discard),
+		new Connector(headerClassifier, 1, toDevice)
+	];
+} else {
+	var firewall_blocks = [ fromDump, headerClassifier, toDump, discard ];
+	var firewall_connectors = [
+		new Connector(fromDump, 0, headerClassifier),
+		new Connector(headerClassifier, 0, discard),
+		new Connector(headerClassifier, 1, toDump)
+	];
+}
 
-var firewall_connectors = [
-	new Connector(fromDevice, 0, headerClassifier),
-	new Connector(headerClassifier, 0, discard),
-	new Connector(headerClassifier, 1, toDevice)
-];
 
 var setProcessingGraphRequest = {
 	type: "SetProcessingGraphRequest",
 	required_modules: [],
+//	blocks: [],
+//	connectors: []
 	blocks: firewall_blocks,
 	connectors: firewall_connectors
 };
@@ -106,6 +136,7 @@ function sendMessage(msg, host) {
 	client.post('http://' + host_addr + ':' + '3636/message/' + msg.type, args,
 		function(data, res) {
 			console.log('Sent msg ' + msg.type);
+			console.log('Body: ' + msg.body);
 			console.log('Response status: ' + res.statusCode + ' body: ' + JSON.stringify(data));
 		});
 
@@ -128,6 +159,13 @@ app.post('/message/SetProcessingGraphResponse', function(req, res) {
 	res.status(200).end();
 });
 
+app.post('/message/Error', function(req, res) {
+	console.log('Received ERROR message from ' + req.headers.host);
+	console.log('	Error type: ' + req.body.error_type + '\n' +
+		    '	Error subtype: ' + req.body.error_subtype + '\n' +
+		    '	Message: ' + req.body.message + '\n' +
+		    '	Extended message: ' + req.body.extended_message);
+});
 
 var server = app.listen(3637, function() {
 	var host = server.address().address;
