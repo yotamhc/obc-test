@@ -1,9 +1,11 @@
-INPUT_IFC = 'obi-eth0';
-OUTPUT_IFC = 'obi-eth0';
+INPUT_IFC = 'em1';
+OUTPUT_IFC = 'em1';
 INPUT_PCAP = '/home/yotam/in_pcap.pcap'
 OUTPUT_PCAP = '/home/yotam/out_pcap.pcap'
 
 USE_DEVICES = true;
+
+APP_FILE = './firewall.js';
 
 module.exports = require('./node_modules/express/lib/express');
 
@@ -34,30 +36,53 @@ app.use(bodyParser.json()); // for parsing application/json
 // Objects
 function FromDevice(id, devname) {
 	this.type = "FromDevice";
+	if (!id)
+		id = "FromDevice_Default";
+	if (!devname)
+		devname = INPUT_IFC;
+
 	this.name = id;
 	this.config = { devname: devname };
 }
 
 function ToDevice(id, devname) {
 	this.type = "ToDevice";
+	if (!id)
+		id = "ToDevice_Default";
+	if (!devname)
+		devname = "OUTPUT_IFC";
+
 	this.name = id;
 	this.config = { devname: devname };
 }
 
 function FromDump(id, filename) {
 	this.type = "FromDump";
+	if (!id)
+		id = "FromDump_Default";
+	if (!filename)
+		filename = INPUT_PCAP;
+
 	this.name = id;
 	this.config = { filename: filename };
 }
 
 function ToDump(id, filename) {
 	this.type = "ToDump";
+	if (!id)
+		id = "ToDump_Default";
+	if (!filename)
+		filename = OUTPUT_PCAP;
+
 	this.name = id;
 	this.config = { filename: filename };
 }
 
 function Discard(id) {
 	this.type = "Discard";
+	if (!id)
+		id = "ToDevice_Default";
+
 	this.name = id;
 	this.config = { };
 }
@@ -77,50 +102,16 @@ function Connector(src, port, dst) {
 	this.dst = dst.name;
 	this.src_port = port;
 	this.dst_port = 0;
-	
-//	this._src_obj = src;
-//	this._dst_obj = dst;	
 }
 
 //////////////////////////////////////////////////////////
-// Samples
+// Default Blocks
 
-var fromDevice = new FromDevice("FromDeviceFirewall", INPUT_IFC);
-var fromDump = new FromDump("FromDumpFirewall", INPUT_PCAP);
-var headerClassifier = new HeaderClassifier("HeaderClassifierFirewall",
-        [
-                { ETH_TYPE: 0x0800, IPV4_PROTO: 6, TCP_DST: 80 },
-                { }
-        ]);
-var toDevice = new ToDevice("ToDeviceFirewall", OUTPUT_IFC);
-var toDump = new ToDump("ToDumpFirewall", OUTPUT_PCAP);
-var discard = new Discard("DiscardFirewall");
-
-if (USE_DEVICES) {
-	var firewall_blocks = [ fromDevice, headerClassifier, toDevice, discard ];
-	var firewall_connectors = [
-		new Connector(fromDevice, 0, headerClassifier),
-		new Connector(headerClassifier, 0, discard),
-		new Connector(headerClassifier, 1, toDevice)
-	];
-} else {
-	var firewall_blocks = [ fromDump, headerClassifier, toDump, discard ];
-	var firewall_connectors = [
-		new Connector(fromDump, 0, headerClassifier),
-		new Connector(headerClassifier, 0, discard),
-		new Connector(headerClassifier, 1, toDump)
-	];
-}
-
-
-var setProcessingGraphRequest = {
-	type: "SetProcessingGraphRequest",
-	required_modules: [],
-//	blocks: [],
-//	connectors: []
-	blocks: firewall_blocks,
-	connectors: firewall_connectors
-};
+var defaultFromDevice = new FromDevice();
+var defaultToDevice = new ToDevice();
+var defaultFromDump = new FromDump();
+var defaultToDump = new ToDump();
+var defaultDiscard = new Discard();
 
 //////////////////////////////////////////////////////////
 // Messages
@@ -168,8 +159,25 @@ app.post('/message/Error', function(req, res) {
 		    '	Extended message: ' + req.body.extended_message);
 });
 
+///////////////////
+// Load OpenBox app
+
+var appModule = require(APP_FILE);
+var obapp = new appModule.Application();
+
+var setProcessingGraphRequest = {
+        type: "SetProcessingGraphRequest",
+        required_modules: [],
+        blocks: obapp.blocks,
+        connectors: obapp.connectors
+};
+
+///////////////////
+// Server
+
 var server = app.listen(3637, function() {
 	var host = server.address().address;
 	var port = server.address().port;
 	console.log('Controller is listening at http://%s:%s', host, port);
 });
+
