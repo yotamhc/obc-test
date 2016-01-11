@@ -3,7 +3,7 @@ var lib = require('./obc-lib.js');
 exports.Application = function() {
 	var headerClassifier = new lib.HeaderClassifier("HeaderClassifierFirewall",
 	        [
-	                { ETH_TYPE: 0x0800, IPV4_PROTO: 6, TCP_DST: 80 },
+	                { ETH_TYPE: 0x0800, IPV4_PROTO: 6, TCP_DST: 8001 },
 	                { }
 	        ]);
 	var firewall_blocks = [ lib.DEFAULT_FROM_DEVICE, headerClassifier, lib.DEFAULT_TO_DEVICE, lib.DEFAULT_DISCARD ];//, lib.DEFAULT_ETHERNET_SWAP, lib.DEFAULT_SET_TIMESTAMP ];

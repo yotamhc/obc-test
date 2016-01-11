@@ -5,7 +5,7 @@ OUTPUT_PCAP = '/home/yotam/out_pcap.pcap'
 
 USE_DEVICES = true;
 
-APP_FILE = './firewall.js';
+APP_FILE = './mirror.js';
 
 module.exports = require('./node_modules/express/lib/express');
 
